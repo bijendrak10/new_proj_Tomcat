@@ -1,0 +1,138 @@
+---
+
+- name: Install Tomcat
+  hosts: host
+  remote_user: ec2-user
+  become: yes
+  become_method: sudo
+  
+  # Task to install & configure apache tomcat on instances
+  
+  tasks:
+  - name: Copy Tomcat Zip
+    copy: src=/root/Tomcat/apache-tomcat-8.5.37.zip dest=/opt/apache-tomcat-8.5.37.zip # Copy tomcat zip file to target machine 
+
+  - name: Create dir
+    file:
+      path: /opt/Tomcat # Create dir to install tomcat 
+      state: directory
+
+  - name: Extract Tomcat Archive
+    unarchive:
+      src: /opt/apache-tomcat-8.5.37.zip # Unzip tomcat zip file on target
+      dest: /opt/Tomcat
+      remote_src: yes
+
+  - name: Configure tomcat-users.xml server
+    template: src=/root/DevOpsProject/Ansible/common/tomcat-users.xml dest=/opt/Tomcat/apache-tomcat-8.5.37/conf/  # Copy configuration file
+
+  - name: Configure context.xml server
+    template: src=/root/DevOpsProject/Ansible/common/context.xml dest=/opt/Tomcat/apache-tomcat-8.5.37/webapps/manager/META-INF/ # Copy configuration file
+
+  - name: Deploy war file
+    synchronize: src=/root/.jenkins/workspace/DevOpsDemoProj/target/DevOpsDemoProj.war dest=/opt/Tomcat/apache-tomcat-8.5.37/webapps/ # Deploy APP war file
+
+  - name: change perm of startup
+    file: 
+      path: /opt/Tomcat/apache-tomcat-8.5.37/bin/startup.sh # Give execute premission to start apache 
+      mode: "a+x"
+	    - name: change perm of startup
+    file: 
+      path: /opt/Tomcat/apache-tomcat-8.5.37/bin/shutdown.sh
+      mode: "a+x"
+
+  - name: change perm of catalina
+    file: 
+      path: /opt/Tomcat/apache-tomcat-8.5.37/bin/catalina.sh
+      mode: "a+x"
+
+  - name: Start apache server
+    command: nohup /opt/Tomcat/apache-tomcat-8.5.37/bin/startup.sh # Start tomcat apache serevr
+    become: yes
+
+  - name: Install docker
+    shell: yum update -y && yum install -y docker && service docker start  # Install Docker on all instances 
+    become: yes
+
+ # Copy server.xml and Dokerfile on host1 
+ 
+- name: Copy server.xml on host1
+  hosts: host1
+  remote_user: ec2-user
+  become: yes
+  become_method: sudo
+  vars:
+   server_port: "81"
+   server_port1: "83"
+  tasks:
+  - name: Configure server.xml server
+    template: src=/root/DevOpsProject/Ansible/host1/server.xml dest=/opt/Tomcat/apache-tomcat-8.5.37/conf/
+
+  - name: Configure index.jsp server
+    template: src=/root/DevOpsProject/Ansible/host1/index.jsp dest=/opt/Tomcat/apache-tomcat-8.5.37/webapps/DevOpsDemoProj/
+    
+  - name: Copy Docker file
+    template: src=/root/DevOpsProject/Ansible/host1/Dockerfile dest=/opt/
+	
+  - name: Configure tomcat-users.xml server
+    template: src=/root/DevOpsProject/Ansible/common/tomcat-users.xml dest=/opt/
+
+  - name: Configure context.xml server
+    template: src=/root/DevOpsProject/Ansible/common/context.xml dest=/opt/
+
+  - name: Build Docker file
+    command: chdir=/opt/ docker build -t my/tomcat .
+    become: yes
+
+  - name: Start Docker
+    shell: docker run -dit --name demodocker -p 83:8080 -v /opt/Tomcat/apache-tomcat-8.5.37/webapps/:/usr/local/tomcat/webapps/ my/tomcat
+    become: yes
+
+# Copy server.xml and Dokerfile on host2
+
+- name: Copy server.xml on host2
+  hosts: host2
+  remote_user: ec2-user
+  become: yes
+  become_method: sudo
+  vars:
+   server_port: "82"
+   server_port1: "84"
+  tasks:
+  - name: Configure server.xml server
+    template: src=/root/DevOpsProject/Ansible/host1/server.xml dest=/opt/Tomcat/apache-tomcat-8.5.37/conf/
+	  - name: Configure index.jsp server
+    template: src=/root/DevOpsProject/Ansible/host1/index.jsp dest=/opt/Tomcat/apache-tomcat-8.5.37/webapps/DevOpsDemoProj/
+
+  - name: Copy Docker file
+    template: src=/root/DevOpsProject/Ansible/host1/Dockerfile dest=/opt/
+
+  - name: Configure tomcat-users.xml server
+    template: src=/root/DevOpsProject/Ansible/common/tomcat-users.xml dest=/opt/
+
+  - name: Configure context.xml server
+    template: src=/root/DevOpsProject/Ansible/common/context.xml dest=/opt/
+
+  - name: Build Docker file
+    command: chdir=/opt/ docker build -t my/tomcat .
+    become: yes
+
+  - name: Start Docker
+    shell: docker run -dit --name demodocker -p 84:8080 -v /opt/Tomcat/apache-tomcat-8.5.37/webapps/:/usr/local/tomcat/webapps/ my/tomcat
+    become: yes
+	
+# Stop and Start apache on all servers 
+
+- name: Start & Stop apache
+  hosts: host
+  remote_user: ec2-user
+  become: yes
+  become_method: sudo
+  tasks:
+  - name: Stop apache server
+    command: nohup /opt/Tomcat/apache-tomcat-8.5.37/bin/shutdown.sh
+    become: yes
+
+  - name: Start apache server
+    command: nohup /opt/Tomcat/apache-tomcat-8.5.37/bin/startup.sh
+    become: yes
